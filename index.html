@@ -1,0 +1,183 @@
+<html>
+<head>
+<title>INFO 3300</title>
+<link href="https://fonts.googleapis.com/css?family=Alegreya|Alegreya+Sans" rel="stylesheet">
+<link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.9.0/styles/default.min.css">
+<script src="https://d3js.org/d3.v4.min.js"></script>
+<script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.9.0/highlight.min.js"></script>
+<script type="text/javascript" src="http://gc.kis.v2.scr.kaspersky-labs.com/74458EDA-C9D2-D142-9A06-FC8CB08BF966/main.js" charset="UTF-8"></script><script src="https://d3js.org/d3.v4.js"></script>
+<script src="d3-tip.js"></script>
+<style>
+body { font-family: 'Alegreya Sans', Calibri, sans-serif; }
+svg { border: none; }
+.d3-tip {
+      line-height: 1;
+      padding: 6px;
+      background: rgba(0, 0, 0, 0.8);
+      color: #fff;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+ 
+    /* Creates a small triangle extender for the tooltip */
+    .d3-tip:after {
+      box-sizing: border-box;
+      display: inline;
+      font-size: 10px;
+      width: 100%;
+      line-height: 1;
+      color: rgba(0, 0, 0, 0.8);
+      content: "\25BC";
+      position: absolute;
+      text-align: center;
+    }
+ 
+    /* Style northward tooltips specifically */
+    .d3-tip.n:after {
+      margin: -2px 0 0 0;
+      top: 100%;
+      left: 0;
+    }
+</style>
+</head>
+
+<body>
+<h3>Title</h3>
+<svg height="1000" width="1270" id="genderplot">
+</svg>
+
+<svg height="400" width="400" id="raceplot">
+</svg>
+
+<script>
+var svg1 = d3.select("#genderplot");
+
+svg1.append("text")
+.attr("id", "textfield")
+.attr("x", 0)
+.attr("y", 50)
+.style("font-size", "48pt");
+
+var selectedMajor = "Computer Science";
+
+// Define variables outside the scope of the callback function.
+var rawGenderData, nestedGenderData;
+
+function parseLineGender (line) {
+    return { 
+        Major: line["Academic Discipline"],
+        Year: Number(line["Year"]),
+        Male: parseFloat(line["Male"].replace(/,/g, '')),
+        Female: parseFloat(line["Female"].replace(/,/g, '')),
+        Total: parseFloat(line["Total"].replace(/,/g, '')) // commas removed
+    };
+}
+
+d3.csv("gender3.csv", parseLineGender, function (error, data) {
+	 rawGenderData = data;
+    
+    
+    // group data by major
+    nestedGenderData = d3.nest()
+    .key(function (d) { return d.Major; })
+    .entries(data);
+
+    var popScale = d3.scaleSqrt()
+    .domain([0, 200000])
+    .range([0, 19]);
+
+    var xScale = d3.scaleLinear()
+    .domain([1967, 2015])
+    .range([100, 1220]);
+
+    var xAxis = d3.axisBottom(xScale);
+    svg1.append("g").call(xAxis);
+
+    var yScale = d3.scaleLinear()
+    .domain([0, 8])
+    .range([50, 900]);
+
+    var colorScale = d3.scaleLinear()
+    .domain([0, 1])
+    .range(["blue", "red"]);
+
+    var majorArray = ["Mechanical Engineering", "Physics", "Computer Science", "Biological Sciences", "Psychology", "Economics", "Political Science and Public Administration", "English and Literature", "Arts and Music"];
+
+    var shorterNames = ["Mech E", "Physics", "CS", "Biology", "Psychology", "Economics", "Political Sci.", "English Lit.", "Arts"];
+
+    var sumPopulation = 0;
+    var sumFemale = 0;
+    var sumMale = 0;
+
+    nestedGenderData.forEach(function(major) {
+        var yPos = majorArray.indexOf(major.key);
+
+        svg1.append("text")
+        .attr("x", 0)
+        .attr("y", yScale(yPos))
+        .style("font-size", "12pt")
+        .text(shorterNames[yPos]);
+
+        svg1.append("line")
+        .attr("x1", 70)
+        .attr("x2", svg1.style("width"))
+        .attr("y1", yScale(yPos))
+        .attr("y2", yScale(yPos))
+        .attr("stroke", "#efefef");
+
+        svg1.selectAll("circle")
+        .on('mouseover', function(d) {
+          d3.select(this).attr("opacity", 0.4);
+        })                  
+        .on('mouseout', function(d) {
+          d3.select(this).attr("opacity", 0.8);
+        })
+
+        major.values.forEach(function (d) {
+            sumPopulation += d.Total;
+            sumFemale += d.Female;
+            sumMale += d.Male;
+            
+            if ((d.Year%2) == 1) {
+                // plot every 2 years
+                var ratio = (sumFemale/sumPopulation);
+
+                var pop = sumPopulation;
+
+                var tip = d3.tip()
+                .attr("class", "d3-tip")
+                .offset([-8, 0])
+                .html(function() { return "Male: " + Math.round((1 - ratio) * 100) + "\%<br>Female: " + Math.round((ratio * 100)) + "\%<br>Enrollment: " + pop});
+
+                svg1.call(tip);
+
+                // var circles = svg1.selectAll("circle")
+                // .enter().append("circle")
+                svg1.append("circle")
+                .attr("cx", xScale(d.Year))
+                .attr("cy", yScale(yPos))
+                .attr("r", popScale(sumPopulation))
+                .attr("fill", colorScale(ratio))
+                .attr("opacity", 0.8)
+                .on('mouseover', tip.show, function(d) {
+                    d3.select(this).attr("opacity", 0.4);
+                })
+                .on('mouseout', tip.hide, function(d) {
+                    d3.select(this).attr("opacity", 0.8);
+                });
+                // .on('mouseover', tip.show)
+                // .on('mouseout', tip.hide);
+
+                // reinitialize 
+                sumPopulation = 0;
+                sumFemale = 0;
+                sumMale = 0;
+            }
+            
+        });
+    });
+});
+
+</script>
+</body>
+</html>
